@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "*.sdf": "xml",
+        "ai_watering.h": "c",
+        "stdio.h": "c"
+    }
+}

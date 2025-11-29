@@ -1,0 +1,176 @@
+#include "ai_watering_task.h"
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include <vector>
+#include "sensor.h"
+
+// --- CONFIGURATION ---
+// Set to 1 to run fast (5 sec intervals) for testing
+// Set to 0 for real deployment (5 min intervals)
+#define TEST_FAST_MODE 1 
+
+#if TEST_FAST_MODE
+    #define SAMPLE_INTERVAL_MS 5000 // 5 seconds
+#else
+    #define SAMPLE_INTERVAL_MS 300000 // 5 minutes
+#endif
+
+// --- MEMORY ALLOCATION ---
+// 1. STACK SIZE: RAM reserved for this FreeRTOS task's execution context. 
+// 8 KB should be sufficient for the shallow tree ensemble model.
+#define AI_TASK_STACK_SIZE 8192 
+
+#define SAMPLES_NEEDED 6 
+
+// --- AI MODEL INCLUDE ---
+extern "C" {
+    #include "ai_watering.h"
+}
+
+// // 1. Structure to hold raw sensor values
+// struct SensorData {
+//     // State sensors (For Averaging)
+//     float PipeGrow;
+//     float WC_slab1;
+//     float WC_slab2;
+//     float HumDef;
+//     float Tair;     
+
+//     // Energy sensors (For Summing)
+//     float Iglob;
+//     float Tot_PAR;
+//     float RadSum;
+//     float PARout;
+// };
+
+// --- HARDWARE INTERFACE ---
+// TODO: REPLACE this mock function with actual sensor reading code!
+// SensorData read_sensors_now() {
+//     SensorData s;
+    
+//     // --- MOCK RANDOM DATA GENERATOR ---
+//     // Simulating slight fluctuations
+//     s.PipeGrow = random(200, 250) / 10.0;   // 20.0 - 25.0 C
+//     s.WC_slab1 = random(400, 600) / 10.0;   // 40.0 - 60.0 %
+//     s.WC_slab2 = random(400, 600) / 10.0;   // 40.0 - 60.0 %
+//     s.HumDef   = random(30, 80) / 10.0;     // 3.0 - 8.0 g/m3
+//     s.Tair     = random(220, 300) / 10.0;   // 22.0 - 30.0 C
+
+//     s.Iglob    = random(100, 800);          // Solar Rad
+//     s.Tot_PAR  = random(50, 400);           
+//     s.RadSum   = random(1000, 5000);        
+//     s.PARout   = random(10, 50);            
+    
+//     return s;
+// }
+
+// ---------------------------------------------------------
+// THE WORKER TASK
+// ---------------------------------------------------------
+void run_30m_cycle_worker(void *parameter) {
+    Serial.println("\n[AI WORKER] --- Starting Data Collection Cycle ---");
+    #if TEST_FAST_MODE
+    Serial.println("[AI WORKER] ⚠️ TEST MODE ACTIVE: 5 Second Intervals ⚠️");
+    #endif
+
+    // Accumulators
+    float sum_PipeGrow = 0, sum_WC_slab1 = 0, sum_WC_slab2 = 0, sum_HumDef = 0, sum_Tair = 0;
+    float total_Iglob = 0, total_Tot_PAR = 0, total_RadSum = 0, total_PARout = 0;
+
+    SensorData first_sample; 
+    SensorData last_sample;  
+
+    // --- LOOP FOR SAMPLES ---
+    for (int i = 0; i < SAMPLES_NEEDED; i++) {
+        
+        SensorData current = read_sensors_now();
+        Serial.printf("[AI WORKER] Sample %d/%d | Tair: %.1f | WC: %.1f | Sun: %.0f\n", 
+                      i + 1, SAMPLES_NEEDED, current.Tair, current.WC_slab1, current.Iglob);
+
+        // 1. Capture snapshots for Trend
+        if (i == 0) first_sample = current; 
+        if (i == SAMPLES_NEEDED - 1) last_sample = current; 
+
+        // 2. Accumulate
+        sum_PipeGrow += current.PipeGrow;
+        sum_WC_slab1 += current.WC_slab1;
+        sum_WC_slab2 += current.WC_slab2;
+        sum_HumDef   += current.HumDef;
+        sum_Tair     += current.Tair;
+
+        total_Iglob   += current.Iglob;
+        total_Tot_PAR += current.Tot_PAR;
+        total_RadSum  += current.RadSum;
+        total_PARout  += current.PARout;
+
+        // Wait interval, BUT NOT after the last sample
+        if (i < SAMPLES_NEEDED - 1) {
+            vTaskDelay(pdMS_TO_TICKS(SAMPLE_INTERVAL_MS));
+        }
+    }
+
+    Serial.println("[AI WORKER] Data Collection Complete. Calculating Features...");
+
+    // --- FEATURE ENGINEERING ---
+    float avg_PipeGrow = sum_PipeGrow / SAMPLES_NEEDED;
+    float avg_WC_slab1 = sum_WC_slab1 / SAMPLES_NEEDED;
+    float avg_WC_slab2 = sum_WC_slab2 / SAMPLES_NEEDED;
+    float avg_HumDef   = sum_HumDef / SAMPLES_NEEDED;
+    float avg_Tair     = sum_Tair / SAMPLES_NEEDED;
+
+    float trend_WC_slab1 = last_sample.WC_slab1 - first_sample.WC_slab1;
+    float heat_load = avg_Tair * total_Iglob;
+
+    // --- PACK DATA (10 Features) ---
+    // [0] PipeGrow_30m_avg
+    // [1] WC_slab1_30m_avg
+    // [2] WC_slab2_30m_avg
+    // [3] HumDef_30m_avg
+    // [4] Iglob_30m_sum
+    // [5] Tot_PAR_30m_sum
+    // [6] RadSum_30m_sum
+    // [7] PARout_30m_sum
+    // [8] WC_slab1_30m_trend
+    // [9] Heat_Load_30m
+
+    union Entry AI_input[10];
+    AI_input[0].fvalue = avg_PipeGrow;
+    AI_input[1].fvalue = avg_WC_slab1;
+    AI_input[2].fvalue = avg_WC_slab2;
+    AI_input[3].fvalue = avg_HumDef;
+    AI_input[4].fvalue = total_Iglob;
+    AI_input[5].fvalue = total_Tot_PAR;
+    AI_input[6].fvalue = total_RadSum;
+    AI_input[7].fvalue = total_PARout;
+    AI_input[8].fvalue = trend_WC_slab1;
+    AI_input[9].fvalue = heat_load;
+
+    // --- PREDICT ---
+    float watering_amount = 0.0;
+    Serial.println("[AI WORKER] Running Inference Model...");
+    
+    // The C-code generated by TL2cgen is called here.
+    // Updated length to 10
+    predict(AI_input, 10, &watering_amount);
+
+    Serial.println("------------------------------------------------");
+    Serial.printf(">>> 🧠 AI DECISION: Water %.2f Liters <<<\n", watering_amount);
+    Serial.println("------------------------------------------------");
+
+    // PumpWatering(watering_amount);
+
+    Serial.println("[AI WORKER] Cycle finished. Task deleting self.\n");
+    vTaskDelete(NULL);
+}
+
+void measure_and_watering_TASK() {
+    xTaskCreate(
+        run_30m_cycle_worker,      
+        "AI_Worker_30m",           
+        AI_TASK_STACK_SIZE,        
+        NULL,                      
+        1,                         
+        NULL                       
+    );
+    Serial.println("[MAIN] AI Task Spawned: Background collection started.");
+}

@@ -1,0 +1,125 @@
+#include <Arduino.h>
+// FreeRTOS headers are built-in to ESP32 Arduino
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+
+// --- AI MODEL INCLUDE ---
+extern "C" {
+    #include "ai_watering.h"
+}
+
+// --- CONFIGURATION ---
+// Stack size for the AI task (bytes). 
+// Tree models are efficient, but let's give it 8KB to be safe.
+#define AI_TASK_STACK_SIZE 8192 
+
+// Task Handle (optional, used if you want to stop/control the task later)
+TaskHandle_t Measure_And_Watering_Handle = NULL;
+
+// ---------------------------------------------------------
+// THE AI TASK FUNCTION
+// This replaces the "loop()" for the AI logic
+// ---------------------------------------------------------
+// void measure_and_watering(void *parameter) {
+//     Serial.print("🤖 AI Task running on Core: ");
+//     Serial.println(xPortGetCoreID());
+//     // The "Infinite Loop" of the task
+//     for(;;) {
+//         unsigned long start = micros();
+//         // 1. GENERATE DUMMY DATA (Replace with real sensors later)
+//         //    Imagine this task reading from a Queue or Global Variable
+//         float raw_sensor_data[38];
+//         for (int i = 0; i < 38; i++) {
+//             // Generate a random float between 0.00 and 100.00
+//             raw_sensor_data[i] = random(0, 10000) / 100.0f;
+//         }
+//         // 2. CONVERT TO TREELITE FORMAT
+//         union Entry input_data[38];
+//         for (int i = 0; i < 38; i++) {
+//             input_data[i].fvalue = (double)raw_sensor_data[i];
+//         }
+//         // 3. PREDICT
+//         double probability = 0.0;
+//         predict(input_data, 0, &probability);
+//         unsigned long end = micros();
+//         // 4. OUTPUT RESULTS
+//         Serial.printf("🔮 Prob: %.4f | Time: %lu us | ", probability, (end - start));    
+//         if (probability > 0.5) {
+//             Serial.println("💧 WATERING");
+//             // digitalWrite(PUMP_PIN, HIGH);
+//         } else {
+//             Serial.println("🌵 DRY");
+//             // digitalWrite(PUMP_PIN, LOW);
+//         }
+//         // 5. CRITICAL: YIELD TO OTHER TASKS
+//         // In standard Arduino 'delay(1000)' blocks the CPU.
+//         // In FreeRTOS, 'vTaskDelay' puts this task to SLEEP so others can run.
+//         // 1000ms delay:
+//         vTaskDelay(1000 / portTICK_PERIOD_MS); 
+//     }
+// }
+/**
+ * Needed function to call:
+ * std::array<float, 8> ReadSensor(...) that return the array of all measurements result follow order 'Tair', 'Rhair', 'PipeGrow', 'Tot_PAR', 'RadSum', 'PARout', 'WC_slab1', 'WC_slab2'
+ * ... PumpWatering(const float watering_amount) that take the input of water in Litter to go do watering*/ 
+void measure_and_watering(void *parameter) {
+    float Iglob_30m_sum = 0;
+    float WC_slab1_30m_ago = 0;
+    bool read_WC_slab1_30m_ago = true;
+    float Tair_x_Iglob = 0;
+
+    // Call all sensor to read every 5m for 30m
+    std::array<float, 8> raw_sensor;
+
+    // Sumerize sensor data for AI input
+    union Entry AI_input[11];
+    for (int i = 0; i < 8; i++) {
+        AI_input[i].fvalue = (float)raw_sensor[i];
+    }
+    // do some sumerize for historical feature
+    AI_input[9].fvalue = 0; // 'Iglob_30m_sum'
+    AI_input[10].fvalue = 0; // 'WC_slab1_30m_ago'
+    AI_input[11].fvalue = 0; // 'Tair_x_Iglob'
+
+    // run AI prediction
+    float watering_amount = 0.0;
+    predict(AI_input, 0, &watering_amount);
+
+    // Call water pump
+    // PumpWatering(watering_amount);
+}
+
+// Task to handle full 30 m
+void measure_and_watering_TASK() {
+    xTaskCreatePinnedToCore(
+        measure_and_watering,              // Function to call
+        "GreenhouseAI",         // Name for debugging
+        AI_TASK_STACK_SIZE, // Stack size
+        NULL,               // Parameters to pass
+        1,                  // Priority (1 = Low, higher numbers = higher priority)
+        &Measure_And_Watering_Handle,    // Task handle
+        1                   // Core ID (0 or 1). Arduino loop runs on 1.
+    );
+}
+
+// ---------------------------------------------------------
+// STANDARD ARDUINO SETUP
+// ---------------------------------------------------------
+void setup() {
+    Serial.begin(115200);
+    delay(2000); // Wait for Serial Monitor
+    Serial.println("🚀 YOLO UNO Greenhouse System Starting...");
+
+    // Create the FreeRTOS Task
+    measure_and_watering_TASK();
+}
+
+// ---------------------------------------------------------
+// STANDARD ARDUINO LOOP
+// ---------------------------------------------------------
+void loop() {
+    // We don't need anything here! 
+    // The 'runAI' task is running independently in the background.
+    // You can delete this whole function or leave it empty.
+    vTaskDelete(NULL); // Optional: Delete the setup task to save memory
+}
