@@ -37,9 +37,15 @@ static void SimulatePumpWatering(const float watering_amount) {
         Serial.printf("!!! [WATERING ACTION] Pump START: %.2f Liters !!!\n", watering_amount);
         Serial.println("===================================================");
         
+        // Set pump active flag
+        isPumpActive = true;
+        
         vTaskDelay(pdMS_TO_TICKS(500)); // Giả lập thời gian bơm ngắn
         
         Serial.println("!!! [WATERING ACTION] Pump STOP (Simulated delay) !!!");
+        
+        // Clear pump active flag
+        isPumpActive = false;
 
     } else {
         Serial.println("[WATERING ACTION] No watering needed (Amount <= 0).");

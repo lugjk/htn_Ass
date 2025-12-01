@@ -30,6 +30,7 @@ extern String wifi_password; // Pass Wifi cần kết nối
 
 // Trạng thái hệ thống
 extern boolean isWifiConnected;
+extern boolean isPumpActive;  // Pump status flag
 extern SemaphoreHandle_t xBinarySemaphoreInternet;
 
 #endif

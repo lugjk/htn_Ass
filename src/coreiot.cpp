@@ -1,8 +1,37 @@
 #include "coreiot.h"
+#include <time.h>
 
 
 WiFiClient espClient;
 PubSubClient client(espClient);
+
+// Variables to track scheduled connection times
+bool connectionActive = false;
+unsigned long connectionStartTime = 0;
+const unsigned long CONNECTION_TIMEOUT = 30 * 60 * 1000; // 30 minutes timeout
+
+// Check if current time matches one of the scheduled times (6:30 AM, 11:30 AM, 6:30 PM)
+bool isScheduledTime() {
+  time_t now = time(nullptr);
+  struct tm* timeinfo = localtime(&now);
+  
+  int hour = timeinfo->tm_hour;
+  int minute = timeinfo->tm_min;
+  
+  // Check if time is 6:30 AM, 11:30 AM, or 6:30 PM (with 5 minute tolerance)
+  if ((hour == 6 && minute >= 30 && minute < 35) ||
+      (hour == 11 && minute >= 30 && minute < 35) ||
+      (hour == 18 && minute >= 30 && minute < 35)) {
+    return true;
+  }
+  return false;
+}
+
+// Check if pump is still running (watering_in_progress or similar flag)
+bool isPumpRunning() {
+  // Check if pump is actively running via global flag from watering task
+  return isPumpActive;
+}
 
 
 void reconnect() {
@@ -106,16 +135,43 @@ void coreiot_task(void *pvParameters){
     setup_coreiot();
 
     while(1){
-
-        if (!client.connected()) {
-            reconnect();
+        // Check if it's time to connect (6:30 AM, 11:30 AM, or 6:30 PM)
+        if (!connectionActive && isScheduledTime()) {
+            connectionActive = true;
+            connectionStartTime = millis();
+            Serial.println("Scheduled connection time reached - Starting CoreIOT connection");
         }
-        client.loop();
 
-        // Sample payload, publish to 'v1/devices/me/telemetry'
-        String payload = "{\"temperature\":" + String(glob_temperature) +  ",\"humidity\":" + String(glob_humidity) + "}";
-        
-        client.publish("v1/devices/me/telemetry", payload.c_str());
-        vTaskDelay(pdMS_TO_TICKS(5000));
+        // If connection is active, maintain MQTT connection and send data
+        if (connectionActive) {
+            if (!client.connected()) {
+                reconnect();
+            }
+            client.loop();
+
+            // Publish telemetry data
+            String payload = "{\"temperature\":" + String(glob_temperature) +  ",\"humidity\":" + String(glob_humidity) + "}";
+            client.publish("v1/devices/me/telemetry", payload.c_str());
+            
+            // Check if pump is still running
+            // If pump is off OR timeout reached, disconnect
+            if (!isPumpRunning() || (millis() - connectionStartTime > CONNECTION_TIMEOUT)) {
+                if (!isPumpRunning()) {
+                    Serial.println("Pump turned off - Closing CoreIOT connection");
+                } else {
+                    Serial.println("Connection timeout reached (30 minutes) - Closing CoreIOT connection");
+                }
+                
+                if (client.connected()) {
+                    client.disconnect();
+                }
+                connectionActive = false;
+            }
+            
+            vTaskDelay(pdMS_TO_TICKS(5000));
+        } else {
+            // Wait and check for next scheduled time
+            vTaskDelay(pdMS_TO_TICKS(30000)); // Check every 30 seconds when not active
+        }
     }
 }

@@ -13,6 +13,7 @@
 #include "task_wifi.h"
 #include "task_webserver.h"
 #include "task_core_iot.h"
+#include "watering_ai_task.h"
 void setup()
 {
   xBinarySemaphoreInternet = xSemaphoreCreateBinary();
