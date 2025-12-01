@@ -5,10 +5,12 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
+#include <DHT20.h>
 
 // Biến cảm biến
 extern float glob_temperature;
 extern float glob_humidity;
+extern DHT20 dht;  // DHT20 sensor instance
 
 // Biến điều khiển LED
 extern bool led1_state;

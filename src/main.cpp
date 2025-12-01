@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include "global.h"
 #include "alarm_system.h"
+#include "diagnostic.h"
 
 // Include các task
 
@@ -33,8 +34,8 @@ void setup()
   // Run diagnostic task (scheduled checks)
   xTaskCreate(diagnosticTask, "Diagnostic", 4096, NULL, 1, NULL);
   
-  // Run alarm monitor task
-  xTaskCreate(alarmMonitorTask, "AlarmMonitor", 2048, NULL, 1, NULL);
+  // Run alarm monitor task - commented for now, will be enabled after fixing includes
+  // xTaskCreate(alarmMonitorTask, "AlarmMonitor", 2048, NULL, 1, NULL);
 }
 
 void loop()

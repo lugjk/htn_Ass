@@ -4,6 +4,9 @@
 float glob_temperature = 0;
 float glob_humidity = 0;
 
+// DHT20 sensor instance
+DHT20 dht;
+
 // Biến toàn cục được nạp từ LittleFS (task_check_info.cpp)
 String WIFI_SSID;
 String WIFI_PASS;

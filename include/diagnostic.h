@@ -21,4 +21,7 @@ bool checkCoreIOTDevice();             // Check CoreIOT device accessibility
 void diagnosticTask(void *pvParameters); // FreeRTOS task - runs diagnostic only at scheduled times
                                          // Syncs with CoreIOT scheduler: 6:30, 11:30, 18:30
 
+// From alarm_system.cpp
+void alarmMonitorTask(void *pvParameters); // FreeRTOS task to monitor and display alarms
+
 #endif

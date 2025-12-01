@@ -3,12 +3,11 @@
 #include "watering_ai_task.h"
 #include "global.h"
 #include "alarm_system.h"
+#include <WiFi.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
-#include <DHT20.h>
 
 extern PubSubClient client;
-extern DHT20 dht;
 
 // Định nghĩa Handle
 TaskHandle_t Measure_And_Watering_Handle = NULL;

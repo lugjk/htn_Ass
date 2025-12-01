@@ -1,47 +1,50 @@
 #include "neo_blinky.h"
-#include "global.h" // <--- QUAN TRỌNG: Cần dòng này để đọc biến glob_temperature
+#include "global.h"
+#include <WiFi.h>
+#include <PubSubClient.h>
+
+extern PubSubClient client;
 
 void neo_blinky(void *pvParameters){
-
-    // Khởi tạo đối tượng NeoPixel (giữ nguyên thông số từ file gốc của bạn)
+    // Initialize NeoPixel
     Adafruit_NeoPixel strip(LED_COUNT, NEO_PIN, NEO_GRB + NEO_KHZ800);
     strip.begin();
-    
-    // Đặt độ sáng vừa phải (0-255) để đỡ chói mắt, bạn có thể chỉnh lại nếu muốn
-    strip.setBrightness(50); 
-    
+    strip.setBrightness(100);
     strip.clear();
     strip.show();
 
     while(1) {
-        uint32_t color;
-        int delay_time = 0;
-
-        // --- KIỂM TRA NHIỆT ĐỘ ---
-        if (glob_temperature > 40.0) 
-        {
-            // Nếu > 40 độ: Màu ĐỎ, nháy NHANH (100ms)
-            color = strip.Color(255, 0, 0); 
-            delay_time = 100;
-        }
-        else 
-        {
-            // Nếu <= 40 độ: Màu XANH LÁ, nháy CHẬM (1000ms)
-            color = strip.Color(0, 255, 0); 
-            delay_time = 1000;
-        }
-
-        // 1. BẬT ĐÈN (theo màu đã chọn)
-        strip.setPixelColor(0, color); 
-        strip.show(); 
+        // Check connection status
+        bool wifi_connected = (WiFi.status() == WL_CONNECTED);
+        bool mqtt_connected = client.connected();
         
-        // Dùng portTICK_PERIOD_MS để đảm bảo tính đúng mili giây trong FreeRTOS
-        vTaskDelay(delay_time / portTICK_PERIOD_MS);
-
-        // 2. TẮT ĐÈN
-        strip.setPixelColor(0, strip.Color(0, 0, 0)); 
-        strip.show(); 
-
-        vTaskDelay(delay_time / portTICK_PERIOD_MS);
+        uint32_t color;
+        int blink_speed;
+        
+        // Determine color based on connection status
+        if (wifi_connected && mqtt_connected) {
+            // ✓ Full success - GREEN
+            color = strip.Color(0, 255, 0);
+            blink_speed = 1000;  // Slow blink
+        } 
+        else if (!wifi_connected && !mqtt_connected) {
+            // ✗ Full fail - RED
+            color = strip.Color(255, 0, 0);
+            blink_speed = 400;   // Fast blink
+        } 
+        else {
+            // ~ Partial - YELLOW
+            color = strip.Color(255, 255, 0);
+            blink_speed = 600;   // Medium blink
+        }
+        
+        // Blink pattern
+        strip.setPixelColor(0, color);
+        strip.show();
+        vTaskDelay(pdMS_TO_TICKS(blink_speed / 2));
+        
+        strip.setPixelColor(0, strip.Color(0, 0, 0));
+        strip.show();
+        vTaskDelay(pdMS_TO_TICKS(blink_speed / 2));
     }
 }

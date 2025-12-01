@@ -29,4 +29,8 @@ void publishAlertToUser(const String& alert_message);
 void publishEventToCore(const String& event_type, const String& event_data, bool is_error = false);
 String getAlarmTypeString(AlarmType type);
 
+// Background tasks
+void alarmMonitorTask(void *pvParameters);     // FreeRTOS task to monitor and display alarms
+void diagnosticTask(void *pvParameters);       // FreeRTOS task for periodic diagnostics
+
 #endif
