@@ -48,7 +48,7 @@ bool checkWiFiConnection() {
     diagnostic_result.wifi_ip = WiFi.localIP().toString();
     diagnostic_result.wifi_signal = WiFi.RSSI();
     
-    Serial.println(COLOR_GREEN "[✓] WiFi Connected" COLOR_RESET);
+    Serial.println(COLOR_GREEN "[] WiFi Connected" COLOR_RESET);
     Serial.printf("    SSID: %s\n", diagnostic_result.wifi_ssid.c_str());
     Serial.printf("    IP Address: %s\n", diagnostic_result.wifi_ip.c_str());
     Serial.printf("    Signal Strength: %d dBm\n", diagnostic_result.wifi_signal);
@@ -58,7 +58,7 @@ bool checkWiFiConnection() {
     return true;
   } else {
     diagnostic_result.wifi_connected = false;
-    Serial.println(COLOR_RED "[✗] WiFi NOT Connected" COLOR_RESET);
+    Serial.println(COLOR_RED "[] WiFi NOT Connected" COLOR_RESET);
     Serial.printf("    WiFi Status: %d\n", WiFi.status());
     // Status codes: 0=IDLE, 1=NO_SSID, 2=SCAN_COMPLETED, 3=CONNECTED, 4=CONNECT_FAILED, 5=CONNECTION_LOST, 6=DISCONNECTED
     return false;
@@ -74,13 +74,13 @@ bool checkMQTTConnection() {
   
   if (client.connected()) {
     diagnostic_result.mqtt_connected = true;
-    Serial.println(COLOR_GREEN "[✓] MQTT Connected" COLOR_RESET);
+    Serial.println(COLOR_GREEN "[] MQTT Connected" COLOR_RESET);
     Serial.printf("    Server: %s:%d\n", diagnostic_result.mqtt_server.c_str(), diagnostic_result.mqtt_port);
     Serial.printf("    Client State: %d (0=connected)\n", client.state());
     return true;
   } else {
     diagnostic_result.mqtt_connected = false;
-    Serial.println(COLOR_RED "[✗] MQTT NOT Connected" COLOR_RESET);
+    Serial.println(COLOR_RED "[] MQTT NOT Connected" COLOR_RESET);
     Serial.printf("    Server: %s:%d\n", diagnostic_result.mqtt_server.c_str(), diagnostic_result.mqtt_port);
     Serial.printf("    Client State: %d\n", client.state());
     
@@ -107,7 +107,7 @@ bool checkCoreIOTDevice() {
   Serial.println("\n" COLOR_YELLOW "=== CoreIOT Device Diagnostic ===" COLOR_RESET);
   
   if (!diagnostic_result.mqtt_connected) {
-    Serial.println(COLOR_RED "[✗] MQTT Not Connected - Cannot verify CoreIOT device" COLOR_RESET);
+    Serial.println(COLOR_RED "[] MQTT Not Connected - Cannot verify CoreIOT device" COLOR_RESET);
     diagnostic_result.iot_accessible = false;
     return false;
   }
@@ -120,14 +120,14 @@ bool checkCoreIOTDevice() {
   
   if (published) {
     diagnostic_result.iot_accessible = true;
-    Serial.println(COLOR_GREEN "[✓] CoreIOT Device Accessible" COLOR_RESET);
+    Serial.println(COLOR_GREEN "[] CoreIOT Device Accessible" COLOR_RESET);
     Serial.printf("    Token: %s (first 8 chars: %.8s...)\n", 
                   CORE_IOT_TOKEN.c_str(), CORE_IOT_TOKEN.c_str());
     Serial.printf("    Test Message Published: %s\n", testPayload.c_str());
     return true;
   } else {
     diagnostic_result.iot_accessible = false;
-    Serial.println(COLOR_RED "[✗] CoreIOT Device NOT Accessible" COLOR_RESET);
+    Serial.println(COLOR_RED "[] CoreIOT Device NOT Accessible" COLOR_RESET);
     Serial.println("    Failed to publish message");
     return false;
   }
@@ -149,15 +149,15 @@ void runFullDiagnostic() {
   // Summary
   Serial.println("\n" COLOR_YELLOW "=== Summary ===" COLOR_RESET);
   Serial.println("┌─────────────────────────────────┐");
-  Serial.printf("│ WiFi:     %s\n", diagnostic_result.wifi_connected ? COLOR_GREEN "✓ OK" COLOR_RESET : COLOR_RED "✗ FAIL" COLOR_RESET);
-  Serial.printf("│ MQTT:     %s\n", diagnostic_result.mqtt_connected ? COLOR_GREEN "✓ OK" COLOR_RESET : COLOR_RED "✗ FAIL" COLOR_RESET);
-  Serial.printf("│ CoreIOT:  %s\n", diagnostic_result.iot_accessible ? COLOR_GREEN "✓ OK" COLOR_RESET : COLOR_RED "✗ FAIL" COLOR_RESET);
+  Serial.printf("│ WiFi:     %s\n", diagnostic_result.wifi_connected ? COLOR_GREEN " OK" COLOR_RESET : COLOR_RED " FAIL" COLOR_RESET);
+  Serial.printf("│ MQTT:     %s\n", diagnostic_result.mqtt_connected ? COLOR_GREEN " OK" COLOR_RESET : COLOR_RED " FAIL" COLOR_RESET);
+  Serial.printf("│ CoreIOT:  %s\n", diagnostic_result.iot_accessible ? COLOR_GREEN " OK" COLOR_RESET : COLOR_RED " FAIL" COLOR_RESET);
   Serial.println("└─────────────────────────────────┘");
   
   if (diagnostic_result.wifi_connected && diagnostic_result.mqtt_connected && diagnostic_result.iot_accessible) {
-    Serial.println(COLOR_GREEN "\n✓ All systems OPERATIONAL!" COLOR_RESET);
+    Serial.println(COLOR_GREEN "\n All systems OPERATIONAL!" COLOR_RESET);
   } else {
-    Serial.println(COLOR_RED "\n✗ Some systems FAILED - Check configurations above" COLOR_RESET);
+    Serial.println(COLOR_RED "\n Some systems FAILED - Check configurations above" COLOR_RESET);
   }
   
   Serial.println("\n");
@@ -172,9 +172,9 @@ void quickStatusCheck() {
   lastCheck = currentTime;
   
   Serial.print("[STATUS] WiFi: ");
-  Serial.print(WiFi.status() == WL_CONNECTED ? "✓" : "✗");
+  Serial.print(WiFi.status() == WL_CONNECTED ? "" : "");
   Serial.print(" MQTT: ");
-  Serial.print(client.connected() ? "✓" : "✗");
+  Serial.print(client.connected() ? "" : "");
   Serial.print(" IP: ");
   Serial.println(WiFi.localIP().toString());
 }
@@ -263,7 +263,7 @@ void diagnosticTask(void *pvParameters) {
       if (diagnostic_result.mqtt_connected) {
         String diagnostic_json = getDiagnosticJSON();
         if (client.publish("v1/devices/me/telemetry", diagnostic_json.c_str())) {
-          Serial.println("[✓] Diagnostic results sent to CoreIOT server");
+          Serial.println("[] Diagnostic results sent to CoreIOT server");
         }
       }
       

@@ -32,7 +32,7 @@ String getAlarmTypeString(AlarmType type) {
 // Publish alarm to CoreIOT as event (with retry logic)
 void publishAlertToUser(const String& alert_message) {
   if (!client.connected()) {
-    Serial.println("[ALARM] ✗ Cannot publish alert - MQTT not connected");
+    Serial.println("[ALARM]  Cannot publish alert - MQTT not connected");
     return;
   }
   
@@ -57,16 +57,16 @@ void publishAlertToUser(const String& alert_message) {
   bool published = client.publish("v1/devices/me/attributes", payload.c_str());
   
   if (published) {
-    Serial.printf("[ALARM] ✓ Alert published to user: %s\n", alert_message.c_str());
+    Serial.printf("[ALARM]  Alert published to user: %s\n", alert_message.c_str());
   } else {
-    Serial.printf("[ALARM] ✗ Failed to publish alert\n");
+    Serial.printf("[ALARM]  Failed to publish alert\n");
   }
 }
 
 // Log event to CoreIOT datalog
 void logToDatalog(const String& event_type, const String& event_data) {
   if (!client.connected()) {
-    Serial.printf("[DATALOG] ✗ Cannot log - MQTT disconnected. Event: %s\n", event_type.c_str());
+    Serial.printf("[DATALOG]  Cannot log - MQTT disconnected. Event: %s\n", event_type.c_str());
     triggerAlarm(ALARM_DATALOG_FAILURE, "Failed to log: " + event_type);
     return;
   }
@@ -85,16 +85,16 @@ void logToDatalog(const String& event_type, const String& event_data) {
   bool published = client.publish("v1/devices/me/telemetry", payload.c_str());
   
   if (published) {
-    Serial.printf("[DATALOG] ✓ Logged: %s\n", event_type.c_str());
+    Serial.printf("[DATALOG]  Logged: %s\n", event_type.c_str());
   } else {
-    Serial.printf("[DATALOG] ✗ Failed to log event\n");
+    Serial.printf("[DATALOG]  Failed to log event\n");
   }
 }
 
 // Publish event with error status
 void publishEventToCore(const String& event_type, const String& event_data, bool is_error) {
   if (!client.connected()) {
-    Serial.printf("[EVENT] ✗ Cannot publish event - MQTT disconnected\n");
+    Serial.printf("[EVENT]  Cannot publish event - MQTT disconnected\n");
     if (is_error) {
       triggerAlarm(ALARM_COREIOT_UNREACHABLE, "Failed to publish: " + event_type);
     }
@@ -105,7 +105,7 @@ void publishEventToCore(const String& event_type, const String& event_data, bool
   StaticJsonDocument<512> doc;
   doc["event_type"] = event_type;
   doc["event_data"] = event_data;
-  doc["is_error"] = is_error;
+  doc["is_error"] = is_error;   
   doc["timestamp"] = millis();
   doc["status"] = is_error ? "error" : "success";
   
@@ -115,9 +115,9 @@ void publishEventToCore(const String& event_type, const String& event_data, bool
   bool published = client.publish("v1/devices/me/telemetry", payload.c_str());
   
   if (published) {
-    Serial.printf("[EVENT] ✓ Published: %s (Error: %d)\n", event_type.c_str(), is_error);
+    Serial.printf("[EVENT] Published: %s (Error: %d)\n", event_type.c_str(), is_error);
   } else {
-    Serial.printf("[EVENT] ✗ Failed to publish event\n");
+    Serial.printf("[EVENT] Failed to publish event\n");
   }
 }
 

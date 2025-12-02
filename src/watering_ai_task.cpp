@@ -22,10 +22,10 @@ static std::array<float, SENSOR_COUNT> ReadSensorData() {
     if (dht.read() == DHT20_OK) {
         t_air = dht.getTemperature();
         r_hair = dht.getHumidity();
-        Serial.printf("[SENSOR] ✓ DHT20 Read: T=%.2f°C, RH=%.2f%%\n", t_air, r_hair);
+        Serial.printf("[SENSOR]  DHT20 Read: T=%.2f°C, RH=%.2f%%\n", t_air, r_hair);
     } else {
         sensor_error = true;
-        Serial.println("[SENSOR] ✗ DHT20 Read Failed");
+        Serial.println("[SENSOR]  DHT20 Read Failed");
         triggerAlarm(ALARM_SENSOR_FAILURE, "DHT20 sensor read error");
     }
     
@@ -35,7 +35,7 @@ static std::array<float, SENSOR_COUNT> ReadSensorData() {
     float wc_slab1 = (float)(1023 - raw1) / 1023.0f;  // Inverted (wetter = higher value)
     float wc_slab2 = (float)(1023 - raw2) / 1023.0f;
     
-    Serial.printf("[SENSOR] ✓ Soil Moisture: WC1=%.2f, WC2=%.2f (Raw: %d, %d)\n", 
+    Serial.printf("[SENSOR]  Soil Moisture: WC1=%.2f, WC2=%.2f (Raw: %d, %d)\n", 
                   wc_slab1, wc_slab2, raw1, raw2);
     
     // Simulated values for other sensors
@@ -85,9 +85,9 @@ static void ControlPump(const float watering_amount) {
             serializeJson(doc, payload);
             
             if (client.publish("v1/devices/me/telemetry", payload.c_str())) {
-                Serial.println("[LOG] ✓ Pump ON event logged to CoreIOT");
+                Serial.println("[LOG]  Pump ON event logged to CoreIOT");
             } else {
-                Serial.println("[LOG] ✗ Failed to log pump ON event");
+                Serial.println("[LOG]  Failed to log pump ON event");
                 triggerAlarm(ALARM_DATALOG_FAILURE, "Failed to log pump start event");
             }
         } else {

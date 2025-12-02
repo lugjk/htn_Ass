@@ -14,11 +14,11 @@ void led_blinky(void *pvParameters){
     if (isPumpActive) {
       // Pump ON = LED ON
       digitalWrite(LED_GPIO, HIGH);
-      Serial.println("[LED] ✓ Pump ON");
+      Serial.println("[LED] Pump ON");
     } else {
       // Pump OFF = LED OFF
       digitalWrite(LED_GPIO, LOW);
-      Serial.println("[LED] ✗ Pump OFF");
+      Serial.println("[LED] Pump OFF");
     }
     
     vTaskDelay(pdMS_TO_TICKS(500));  // Check every 500ms
