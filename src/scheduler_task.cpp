@@ -153,6 +153,9 @@ void run_scheduler_and_sleep() {
     Serial.printf("[SCHEDULER] 💤 Entering Deep Sleep for %llu seconds...\n", sleep_sec);
     Serial.flush(); 
 
+    // 5. UPLOAD DATA TO SERVER
+    // TODO: Core IoT code here, it have to be BLOCKING CODE
+
     digitalWrite(GPIO_NUM_48, LOW); // Turn OFF LED
 
     esp_sleep_enable_timer_wakeup(sleep_sec * 1000000ULL);
