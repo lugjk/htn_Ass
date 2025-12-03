@@ -119,10 +119,17 @@ void run_scheduler_and_sleep() {
         time_ok = sync_time();
     }
 
-    // 2. RUN AI (BLOCKING)
+    // 2. RUN AI (BLOCKING) WITH ERROR CHECK
     // Run this REGARDLESS of wifi status. 
     // The show must go on! (Offline Fallback)
-    measure_and_watering_BLOCKING();
+    bool success = measure_and_watering_BLOCKING();
+
+    if (success) {
+        Serial.println("[SCHEDULER] ✅ Cycle Completed Successfully.");
+    } else {
+        Serial.println("[SCHEDULER] ⛔ Cycle ABORTED due to Sensor Errors.");
+        // TODO: Alert
+    }
 
     // 3. CALCULATE DEEP SLEEP DURATION
     uint64_t sleep_sec = 0;

@@ -1,47 +1,56 @@
 #include "sensor.h"
 
-// No more hardcoded dataset here! 
-// We are now a slave to the Serial Monitor.
+// Helper to check if a number is valid
+bool is_valid_reading(float val, float min, float max) {
+    if (isnan(val)) return false; // Check for NaN
+    if (val < min || val > max) return false; // Check bounds
+    return true;
+}
 
-SensorData read_sensors_now() {
+SensorData get_sensor_reading() {
     SensorData s;
-    
-    // 1. Handshake: Tell the laptop we are ready
-    // We use a specific tag so the Python script knows when to send
+    s.valid = false; // Default to fail until proven innocent
+
     Serial.println("REQ_DATA"); 
 
-    // 2. Wait for data (Blocking)
-    // The FreeRTOS task will hang here until you send a line
+    // 1. TIMEOUT CHECK
+    unsigned long start = millis();
+    // Wait max 2 seconds for data (Mock Mode) or Sensor Response
     while (Serial.available() == 0) {
-        vTaskDelay(10 / portTICK_PERIOD_MS); // Yield to other tasks while waiting
+        if (millis() - start > 2000) {
+            Serial.println("[SENSOR ERROR] ❌ Timeout! No data received.");
+            return s; // Returns valid=false
+        }
+        vTaskDelay(10 / portTICK_PERIOD_MS);
     }
 
-    // 3. Read the incoming line
-    // Expected format: "PipeGrow,WC_slab1,WC_slab2,HumDef,Tair,Iglob,Tot_PAR,RadSum,PARout"
+    // 2. PARSE DATA
     String line = Serial.readStringUntil('\n');
-    line.trim(); // Remove whitespace/newlines
+    line.trim();
 
-    // 4. Parse the CSV string
-    // We use sscanf for quick parsing of the comma-separated string
-    // Note: The order MUST match the Python script's sending order!
     int count = sscanf(line.c_str(), "%f,%f,%f,%f,%f,%f,%f,%f,%f", 
-           &s.PipeGrow, 
-           &s.WC_slab1, 
-           &s.WC_slab2, 
-           &s.HumDef, 
-           &s.Tair, 
-           &s.Iglob, 
-           &s.Tot_PAR, 
-           &s.RadSum, 
-           &s.PARout
+           &s.PipeGrow, &s.WC_slab1, &s.WC_slab2, &s.HumDef, &s.Tair, 
+           &s.Iglob, &s.Tot_PAR, &s.RadSum, &s.PARout
     );
 
     if (count != 9) {
-        Serial.println("[ERROR] Malformed CSV line received!");
-        // Return zeros or safe defaults if parsing failed
-        return s; 
+        Serial.println("[SENSOR ERROR] ❌ Malformed Data Packet!");
+        return s;
     }
 
-    Serial.println("[SENSOR DRIVER] Data received and parsed.");
+    // 3. SANITY CHECK
+    // Check key sensors for realistic values.
+    if (!is_valid_reading(s.Tair, -10.0, 60.0)) {
+        Serial.println("[SENSOR ERROR] ❌ Temperature out of bounds!");
+        return s;
+    }
+    if (!is_valid_reading(s.WC_slab1, 0.0, 100.0)) {
+        Serial.println("[SENSOR ERROR] ❌ WC_slab1 out of bounds!");
+        return s;
+    }
+
+    // If we survived all checks:
+    s.valid = true;
+    Serial.println("[SENSOR DRIVER] Data Validated ✅");
     return s;
 }

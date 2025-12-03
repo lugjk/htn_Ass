@@ -3,16 +3,18 @@
 
 #include <Arduino.h>
 
-// 1. Structure to hold raw sensor values
 struct SensorData {
-    // State sensors (For Averaging)
+    // Validity Flag: true = good data, false = sensor error/timeout
+    bool valid; 
+
+    // State sensors
     float PipeGrow;
     float WC_slab1;
     float WC_slab2;
     float HumDef;
     float Tair;     
 
-    // Energy sensors (For Summing)
+    // Energy sensors
     float Iglob;
     float Tot_PAR;
     float RadSum;
@@ -21,10 +23,8 @@ struct SensorData {
 
 /**
  * @brief Reads the next sensor data sample.
- * * In Simulation Mode, this iterates through a stored dataset.
- * In Real Mode, this would query physical pins/libs.
- * * @return SensorData struct with the latest values.
+ * Includes timeout and validity checks.
  */
-SensorData read_sensors_now();
+SensorData get_sensor_reading();
 
 #endif

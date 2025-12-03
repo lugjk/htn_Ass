@@ -4,11 +4,10 @@
 #include <Arduino.h>
 
 /**
- * @brief Runs the full 30-minute data collection and AI inference cycle.
- * * BLOCKING FUNCTION: This will not return until the cycle is complete.
- * - In Real Mode: Takes ~30 minutes.
- * - In Mock Mode: Takes ~30 seconds.
+ * @brief Runs the full AI cycle with Error Handling.
+ * @return true if cycle completed and prediction made.
+ * @return false if too many sensor errors occurred (Safety Abort).
  */
-void measure_and_watering_BLOCKING();
+bool measure_and_watering_BLOCKING();
 
 #endif
