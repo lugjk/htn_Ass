@@ -8,7 +8,8 @@
 #define NEO_PIN 45
 #define LED_COUNT 1 
 
-void neo_blinky(void *pvParameters);
-
+void green_neo_blinky(void *pvParameters);
+void red_neo_blinky(void *pvParameters);
+void yellow_neo_blinky(void *pvParameters);
 
 #endif

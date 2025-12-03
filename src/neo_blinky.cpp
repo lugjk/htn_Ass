@@ -1,47 +1,78 @@
 #include "neo_blinky.h"
-#include "global.h" // <--- QUAN TRỌNG: Cần dòng này để đọc biến glob_temperature
+#include "global.h"
+#include <Arduino.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 
+extern int CheckAllconnection();
+
+// --------------------------------------------------------------------------
+// NEO_BLINKY - Task điều khiển trạng thái LED/NeoPixel
+// Nhiệm vụ: Gọi CheckAllconnection() và điều khiển pin LED tương ứng
+// --------------------------------------------------------------------------
 void neo_blinky(void *pvParameters){
+    // Loại bỏ cảnh báo tham số không sử dụng
+    (void) pvParameters;
 
-    // Khởi tạo đối tượng NeoPixel (giữ nguyên thông số từ file gốc của bạn)
-    Adafruit_NeoPixel strip(LED_COUNT, NEO_PIN, NEO_GRB + NEO_KHZ800);
-    strip.begin();
+    // Khởi tạo các pin đầu ra
+    // Note: NEO_GREEN_PIN, NEO_RED_PIN, NEO_YELLOW_PIN được định nghĩa trong global.h
+    pinMode(NEO_GREEN_PIN, OUTPUT);
+    pinMode(NEO_RED_PIN, OUTPUT);
     
-    // Đặt độ sáng vừa phải (0-255) để đỡ chói mắt, bạn có thể chỉnh lại nếu muốn
-    strip.setBrightness(50); 
-    
-    strip.clear();
-    strip.show();
+    // Đảm bảo tất cả tắt khi bắt đầu
+    digitalWrite(NEO_GREEN_PIN, LOW);
+    digitalWrite(NEO_RED_PIN, LOW);
 
-    while(1) {
-        uint32_t color;
-        int delay_time = 0;
+    Serial.println("[NEO] Task Điều Khiển NeoPixel Bắt Đầu");
 
-        // --- KIỂM TRA NHIỆT ĐỘ ---
-        if (glob_temperature > 40.0) 
-        {
-            // Nếu > 40 độ: Màu ĐỎ, nháy NHANH (100ms)
-            color = strip.Color(255, 0, 0); 
-            delay_time = 100;
-        }
-        else 
-        {
-            // Nếu <= 40 độ: Màu XANH LÁ, nháy CHẬM (1000ms)
-            color = strip.Color(0, 255, 0); 
-            delay_time = 1000;
-        }
-
-        // 1. BẬT ĐÈN (theo màu đã chọn)
-        strip.setPixelColor(0, color); 
-        strip.show(); 
+    while(true){
+        // 1. Kiểm tra trạng thái kết nối
+        int status = CheckAllconnection();
         
-        // Dùng portTICK_PERIOD_MS để đảm bảo tính đúng mili giây trong FreeRTOS
-        vTaskDelay(delay_time / portTICK_PERIOD_MS);
+        // 2. Điều khiển LED dựa trên trạng thái
+        switch(status){
+            case 1: // Tất cả OK (Xanh Lá)
+                // Chế độ Xanh Lá: Nháy chậm (100ms ON / 1900ms OFF)
+                digitalWrite(NEO_GREEN_PIN, HIGH);
+                digitalWrite(NEO_RED_PIN, LOW);
+                vTaskDelay(pdMS_TO_TICKS(100)); 
+                digitalWrite(NEO_GREEN_PIN, LOW);
+                vTaskDelay(pdMS_TO_TICKS(1900));
+                break;
 
-        // 2. TẮT ĐÈN
-        strip.setPixelColor(0, strip.Color(0, 0, 0)); 
-        strip.show(); 
+            case 2: // Lỗi một phần/Đang kết nối (2 mau)
+                // Chế độ Vàng: Nháy nhanh (100ms ON / 200ms OFF)
+                 digitalWrite(NEO_GREEN_PIN, HIGH);
+                digitalWrite(NEO_RED_PIN, LOW);
+                vTaskDelay(pdMS_TO_TICKS(500));
+                digitalWrite(NEO_GREEN_PIN, LOW);
 
-        vTaskDelay(delay_time / portTICK_PERIOD_MS);
-    }
+        // Đỏ 0.5s
+                digitalWrite(NEO_RED_PIN, HIGH);
+                vTaskDelay(pdMS_TO_TICKS(500));
+                digitalWrite(NEO_RED_PIN, LOW);
+                break;
+
+            case 3: // Lỗi nghiêm trọng (Đỏ)
+                // Chế độ Đỏ: Nháy trung bình (100ms ON / 400ms OFF)
+                digitalWrite(NEO_GREEN_PIN, LOW);
+                digitalWrite(NEO_RED_PIN, HIGH);
+                vTaskDelay(pdMS_TO_TICKS(100)); 
+                digitalWrite(NEO_RED_PIN, LOW);
+                vTaskDelay(pdMS_TO_TICKS(400));
+                break;
+            
+            default: // Trạng thái mặc định hoặc 0 (Chờ/Tắt)
+                digitalWrite(NEO_GREEN_PIN, LOW);
+                digitalWrite(NEO_RED_PIN, LOW);
+                // Kiểm tra lại sau 1 giây
+                vTaskDelay(pdMS_TO_TICKS(1000));
+                break;
+        }   
+    }   
+    // Task không bao giờ thoát khỏi vòng lặp
 }
+
+
+void green_neo_blinky(void *pvParameters){ (void) pvParameters;}
+void red_neo_blinky(void *pvParameters){ (void) pvParameters;}
