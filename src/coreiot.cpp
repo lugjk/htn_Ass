@@ -1,49 +1,30 @@
 #include "coreiot.h"
-#include <time.h>
 
+// ----------- Cấu hình (Lấy từ global.h) -----------
+// const char* coreIOT_Server = "10.235.76.226";  
+// const char* coreIOT_Token = "g7drm1amhd3dchr379xu";   // Device Access Token
+const int   mqttPort = 1883; // Port mặc định cho MQTT
+// ----------------------------------------
 
 WiFiClient espClient;
 PubSubClient client(espClient);
 
-// Variables to track scheduled connection times
-bool connectionActive = false;
-unsigned long connectionStartTime = 0;
-const unsigned long CONNECTION_TIMEOUT = 30 * 60 * 1000; // 30 minutes timeout
-
-// Check if current time matches one of the scheduled times (6:30 AM, 11:30 AM, 6:30 PM)
-bool isScheduledTime() {
-  time_t now = time(nullptr);
-  struct tm* timeinfo = localtime(&now);
-  
-  int hour = timeinfo->tm_hour;
-  int minute = timeinfo->tm_min;
-  
-  // Check if time is 6:30 AM, 11:30 AM, or 6:30 PM (with 5 minute tolerance)
-  if ((hour == 6 && minute >= 30 && minute < 35) ||
-      (hour == 11 && minute >= 30 && minute < 35) ||
-      (hour == 18 && minute >= 30 && minute < 35)) {
-    return true;
-  }
-  return false;
-}
-
-// Check if pump is still running (watering_in_progress or similar flag)
-bool isPumpRunning() {
-  // Check if pump is actively running via global flag from watering task
-  return isPumpActive;
-}
-
 
 void reconnect() {
-  // Loop until we're reconnected
-  while (!client.connected()) {
-    Serial.print("Attempting MQTT connection...");
-    // Attempt to connect (username=token, password=empty)
-    //if (client.connect("ESP32Client", coreIOT_Token, NULL)) {
+  // Task chính (coreiot_task) sẽ gọi hàm này liên tục nếu kết nối bị mất.
+  // Hàm này CHỈ THỰC HIỆN KẾT NỐI MỘT LẦN (non-blocking).
+  if (!client.connected()) {
+    Serial.print("Attempting MQTT connection to ");
+    Serial.print(CORE_IOT_SERVER.c_str());
+    Serial.print("...");
+    
+    // Tạo client ID ngẫu nhiên
     String clientId = "ESP32Client-";
     clientId += String(random(0xffff), HEX);
 
-    if (client.connect(clientId.c_str())) {
+    // THỰC HIỆN KẾT NỐI: Sử dụng CORE_IOT_TOKEN làm username để đăng nhập
+    // Cú pháp: client.connect(clientId, username, password)
+    if (client.connect(clientId.c_str(), CORE_IOT_TOKEN.c_str(), NULL)) {
         
       Serial.println("connected to CoreIOT Server!");
       client.subscribe("v1/devices/me/rpc/request/+");
@@ -52,8 +33,8 @@ void reconnect() {
     } else {
       Serial.print("failed, rc=");
       Serial.print(client.state());
-      Serial.println(" try again in 5 seconds");
-      delay(5000);
+      Serial.println(" will retry in 5 seconds (next loop).");
+      // KHÔNG DÙNG delay() ở đây để Task khác có thể chạy.
     }
   }
 }
@@ -68,32 +49,33 @@ void callback(char* topic, byte* payload, unsigned int length) {
   char message[length + 1];
   memcpy(message, payload, length);
   message[length] = '\0';
-  Serial.print("Payload: ");
   Serial.println(message);
 
-  // Parse JSON
+  // Deserialize JSON document
   StaticJsonDocument<256> doc;
   DeserializationError error = deserializeJson(doc, message);
 
   if (error) {
-    Serial.print("deserializeJson() failed: ");
-    Serial.println(error.c_str());
+    Serial.print(F("deserializeJson() failed: "));
+    Serial.println(error.f_str());
     return;
   }
 
+  // Get the RPC method
   const char* method = doc["method"];
-  if (strcmp(method, "setStateLED") == 0) {
-    // Check params type (could be boolean, int, or string according to your RPC)
+  
+  if (strcmp(method, "setValueLED") == 0) { 
+    // Get the boolean, int, or string according to your RPC
     // Example: {"method": "setValueLED", "params": "ON"}
     const char* params = doc["params"];
 
     if (strcmp(params, "ON") == 0) {
       Serial.println("Device turned ON.");
-      //TODO
+      //TODO: Thêm logic điều khiển LED
 
     } else {   
       Serial.println("Device turned OFF.");
-      //TODO
+      //TODO: Thêm logic điều khiển LED
 
     }
   } else {
@@ -105,26 +87,20 @@ void callback(char* topic, byte* payload, unsigned int length) {
 
 void setup_coreiot(){
 
-  //Serial.print("Connecting to WiFi...");
-  //WiFi.begin(wifi_ssid, wifi_password);
-  //while (WiFi.status() != WL_CONNECTED) {
-  
-  // while (isWifiConnected == false) {
-  //   delay(500);
-  //   Serial.print(".");
-  // }
-
+  // Chờ cho Wifi được kết nối (nhận semaphore từ task_wifi)
+  Serial.println("Waiting for Internet connection semaphore...");
   while(1){
     if (xSemaphoreTake(xBinarySemaphoreInternet, portMAX_DELAY)) {
+       xSemaphoreGive(xBinarySemaphoreInternet); // Trả lại semaphore cho các task khác
       break;
     }
     delay(500);
     Serial.print(".");
   }
 
-
   Serial.println(" Connected!");
 
+  // Cấu hình MQTT client
   client.setServer(CORE_IOT_SERVER.c_str(), CORE_IOT_PORT.toInt());
   client.setCallback(callback);
 
@@ -135,43 +111,26 @@ void coreiot_task(void *pvParameters){
     setup_coreiot();
 
     while(1){
-        // Check if it's time to connect (6:30 AM, 11:30 AM, or 6:30 PM)
-        if (!connectionActive && isScheduledTime()) {
-            connectionActive = true;
-            connectionStartTime = millis();
-            Serial.println("Scheduled connection time reached - Starting CoreIOT connection");
+        // CHẾ ĐỘ LUÔN KẾT NỐI: Task này liên tục kiểm tra và gọi reconnect
+        if (!client.connected()) {
+            reconnect();
         }
+        
+        // Loop để xử lý các gói tin đến và đi (cần gọi thường xuyên)
+        client.loop();
 
-        // If connection is active, maintain MQTT connection and send data
-        if (connectionActive) {
-            if (!client.connected()) {
-                reconnect();
-            }
-            client.loop();
-
-            // Publish telemetry data
-            String payload = "{\"temperature\":" + String(glob_temperature) +  ",\"humidity\":" + String(glob_humidity) + "}";
-            client.publish("v1/devices/me/telemetry", payload.c_str());
-            
-            // Check if pump is still running
-            // If pump is off OR timeout reached, disconnect
-            if (!isPumpRunning() || (millis() - connectionStartTime > CONNECTION_TIMEOUT)) {
-                if (!isPumpRunning()) {
-                    Serial.println("Pump turned off - Closing CoreIOT connection");
-                } else {
-                    Serial.println("Connection timeout reached (30 minutes) - Closing CoreIOT connection");
-                }
-                
-                if (client.connected()) {
-                    client.disconnect();
-                }
-                connectionActive = false;
-            }
-            
-            vTaskDelay(pdMS_TO_TICKS(5000));
+        // Gửi Telemetry (chỉ khi kết nối thành công)
+        String payload = "{\"temperature\":" + String(glob_temperature) +  ",\"humidity\":" + String(glob_humidity) + "}";
+        
+        if (client.connected()) {
+             client.publish("v1/devices/me/telemetry", payload.c_str());
+             Serial.println("Published payload: " + payload);
         } else {
-            // Wait and check for next scheduled time
-            vTaskDelay(pdMS_TO_TICKS(30000)); // Check every 30 seconds when not active
+             Serial.println("MQTT not connected. Skipping telemetry publish.");
         }
+
+
+        // Dừng Task 5 giây. Điều này xác định tần suất thử lại kết nối và gửi dữ liệu.
+        vTaskDelay(5000 / portTICK_PERIOD_MS);  
     }
 }
